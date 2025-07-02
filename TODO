@@ -37,7 +37,6 @@ A solo-use Kanban-style workflow/task manager built using the MERN stack (MongoD
 
 ## 🚀 Tech Stack
 
-- **Frontend:** React, Tailwind CSS, Zustand or Context API, DnD Kit
+- **Frontend:** React, Tailwind CSS, DnD Kit
 - **Backend:** Node.js, Express
 - **Database:** MongoDB (with Mongoose)
-- **State Persistence:** MongoDB or local fallback
