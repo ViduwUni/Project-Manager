@@ -10,6 +10,7 @@ const BoardsPage = () => {
     const [boards, setBoards] = useState([]);
     const [title, setTitle] = useState("");
     const host = process.env.REACT_APP_HOST;
+    const by = 'Designed & developed by Vidun Hettiarachchi';
 
     const fetchBoards = async () => {
         const res = await fetch(`http://${host}:5000/api/boards`);
@@ -55,7 +56,7 @@ const BoardsPage = () => {
     }, []);
 
     return (
-        <div className="p-8 max-w-3xl mx-auto">
+        <div className="p-8 max-w-3xl mx-auto relative w-screen h-auto mb-4">
             <div className="border border-gray-900 rounded-3xl mb-5 flex justify-center gap-5 items-center p-3 h-16">
                 <FaClipboard size={30} />
                 <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -79,7 +80,7 @@ const BoardsPage = () => {
                 </button>
             </form>
 
-            <div className="space-y-2">
+            <div className="space-y-4">
                 {boards.length === 0 ? (
                     <p className="text-center text-gray-500 mt-10">No boards available.</p>
                 ) : (
@@ -87,6 +88,10 @@ const BoardsPage = () => {
                         <BoardCard key={board._id} board={board} onDelete={deleteBoard} />
                     ))
                 )}
+            </div>
+
+            <div className="fixed bottom-0 left-0 w-full bg-white shadow-md z-50 p-1 border text-xs">
+                <p>{by}</p>
             </div>
         </div>
     );

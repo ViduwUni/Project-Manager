@@ -3,12 +3,54 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: 'ComicReliefB';
-  src: url('../assets/fonts/ComicReliefB.ttf') format('truetype');
+  font-family: "ComicReliefB";
+  src: url("../assets/fonts/ComicReliefB.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
 }
 
+@keyframes pulseDrop {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+}
+
+.dot {
+  font-size: 24px;
+  animation: bounce 1.4s infinite;
+}
+
+.bounce1 {
+  animation-delay: 0s;
+}
+.bounce2 {
+  animation-delay: 0.2s;
+}
+.bounce3 {
+  animation-delay: 0.4s;
+}
+
 body {
   @apply font-sans;
+}
+
+.animate-drop {
+  animation: pulseDrop 1s infinite;
 }

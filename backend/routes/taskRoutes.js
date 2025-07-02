@@ -1,5 +1,6 @@
 const express = require('express');
 const Task = require('../models/Task');
+const { deleteFile } = require('../utils/deleteFile');
 
 module.exports = function (io) {
     const router = express.Router();
@@ -44,13 +45,31 @@ module.exports = function (io) {
 
     // Delete task
     router.delete('/:id', async (req, res) => {
-        const task = await Task.findById(req.params.id);
-        if (task) {
+        try {
+            const task = await Task.findById(req.params.id);
+            if (!task) return res.status(404).json({ message: "Task not found" });
+
+            task.descriptions?.forEach(desc => {
+                if (desc.content) {
+                    // Extract URL inside parentheses
+                    const urlMatch = desc.content.match(/\((.*?)\)/);
+                    if (urlMatch && urlMatch[1]) {
+                        // Extract filename from URL
+                        const filename = urlMatch[1].split('/').pop();
+                        if (filename) {
+                            console.log("🖼️ Deleting file from content:", filename);
+                            deleteFile(filename);
+                        }
+                    }
+                }
+            });
+
             await Task.findByIdAndDelete(req.params.id);
-            io.to(task.boardId).emit("task-deleted", task._id); // emit
+            io.to(task.boardId).emit("task-deleted", task._id);
+
             res.json({ message: "Task deleted" });
-        } else {
-            res.status(404).json({ message: "Task not found" });
+        } catch (err) {
+            res.status(500).json({ message: "Server error deleting task" });
         }
     });
 

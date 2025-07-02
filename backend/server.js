@@ -3,6 +3,8 @@ const { Server } = require('socket.io');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
 require('dotenv').config();
 
 const boardRoutesFn = require('./routes/boardRoutes');
@@ -18,6 +20,13 @@ const io = new Server(server, {
         methods: ["GET", "POST", "PUT", "DELETE"]
     }
 });
+
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type']
+}));
+app.use(express.json());
 
 // Socket.IO handlers
 io.on("connection", (socket) => {
@@ -53,12 +62,28 @@ io.on("connection", (socket) => {
     });
 });
 
-app.use(cors());
-app.use(express.json());
+// Multer storage
+const storage = multer.diskStorage({
+    destination: 'uploads/',
+    filename: (req, file, cb) => {
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, unique + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage });
+app.post('/api/upload', upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).send("No file uploaded");
+    res.json({
+        url: `${req.protocol}://${req.get('host')}/api/uploads/${req.file.filename}`,
+        filename: req.file.filename
+    });
+});
 
 // Routes
 app.use('/api/boards', boardRoutesFn(io));
 app.use('/api/tasks', taskRoutesFn(io));
+app.use('/api/uploads', express.static('uploads'));
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, {
