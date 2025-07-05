@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const boardRoutesFn = require('./routes/boardRoutes');
@@ -72,11 +73,57 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+
+const voiceNotesDir = path.join(__dirname, "uploads/voice-notes");
+if (!fs.existsSync(voiceNotesDir)) {
+    fs.mkdirSync(voiceNotesDir, { recursive: true });
+};
+
+const voiceStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, voiceNotesDir);
+    },
+    filename: (req, file, cb) => {
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, unique + path.extname(file.originalname));
+    }
+});
+
+const voiceUpload = multer({
+    storage: voiceStorage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'audio/webm') {
+            cb(null, true);
+        } else {
+            cb(new Error("Only .webm audio allowed"), false);
+        }
+    }
+});
+
 app.post('/api/upload', upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
     res.json({
         url: `${req.protocol}://${req.get('host')}/api/uploads/${req.file.filename}`,
         filename: req.file.filename
+    });
+});
+app.post('/api/upload/voice', voiceUpload.single('voice'), (req, res) => {
+    if (!req.file) return res.status(400).send("No file uploaded");
+    res.json({
+        url: `${req.protocol}://${req.get('host')}/api/uploads/voice-notes/${req.file.filename}`,
+        filename: req.file.filename
+    });
+});
+app.delete('/api/uploads/:filename', (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(voiceNotesDir, filename);
+
+    fs.unlink(filePath, (err) => {
+        if (err) {
+            console.error("Failed to delete file:", err.message);
+            return res.status(404).json({ error: 'File not found' });
+        }
+        res.json({ success: true, message: 'File deleted' });
     });
 });
 

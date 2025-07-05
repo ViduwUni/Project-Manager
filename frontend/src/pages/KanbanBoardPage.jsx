@@ -5,9 +5,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { coy } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Tooltip } from "antd";
 import { toast } from "react-toastify";
-import Button from "@mui/material/Button";
+import QRCodeToast from "../components/QRCodeToast";
 import socket from "../socket";
-import CustomSelect from "../components/CustomSelect";
 import {
   DndContext,
   closestCenter,
@@ -36,6 +35,9 @@ import {
 import { IoChevronBackCircle } from "react-icons/io5";
 import { FaEdit, FaWindowClose } from "react-icons/fa";
 import { TiTick } from "react-icons/ti";
+import { FaShareNodes, FaImages } from "react-icons/fa6";
+import { MdDescription } from "react-icons/md";
+import RecordAudio from "../components/RecordAudio";
 
 const PRIORITIES = ["Low", "Medium", "High"];
 const HOST = process.env.REACT_APP_HOST;
@@ -138,8 +140,11 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
       // initialize with task.descriptions or fallback to array with one description
       setEditedDescriptions(
         task.descriptions?.length
-          ? task.descriptions
-          : [{ content: "", createdAt: new Date() }]
+          ? task.descriptions.map((d) => ({
+            ...d,
+            filename: d.filename || null, // ← ensure it exists
+          }))
+          : [{ content: "", createdAt: new Date(), filename: null }]
       );
       setIsEditing(false);
     }
@@ -162,6 +167,34 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
     ]);
   };
 
+  const toggleChecked = async (index) => {
+    const newDescs = [...editedDescriptions];
+    newDescs[index].checked = !newDescs[index].checked;
+    setEditedDescriptions(newDescs);
+
+    // save instantly
+    try {
+      await fetch(`http://${HOST}:5000/api/tasks/${task._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editedTitle,
+          descriptions: newDescs.map((desc) => ({
+            content: desc.content,
+            createdAt: desc.createdAt,
+            filename: desc.filename || null,
+            checked: desc.checked || false,
+          })),
+        }),
+      });
+
+      toast.success("Checklist updated!");
+    } catch (err) {
+      console.error("Failed to update checklist item:", err);
+      toast.error("Failed to update checklist.");
+    }
+  };
+
   // Remove a description by index
   const removeDescription = (index) => {
     setEditedDescriptions((descs) => descs.filter((_, i) => i !== index));
@@ -178,6 +211,7 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
             content: desc.content,
             createdAt: desc.createdAt,
             filename: desc.filename || null,
+            checked: desc.checked || false,
           })),
         }),
       });
@@ -185,6 +219,7 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
       if (res.ok) {
         const updatedTask = await res.json();
         onTaskUpdate(updatedTask);
+        console.log("✅ Updated task from backend:", updatedTask);
         setIsEditing(false);
         onClose();
       } else {
@@ -192,6 +227,27 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
       }
     } catch (err) {
       console.error("Error updating task:", err);
+    }
+  };
+
+  const deleteAudio = async (index, filename) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this voice note?");
+    if (!confirmDelete) return;
+
+    if (!filename || filename === "undefined") {
+      alert("Invalid voice note filename");
+      return;
+    }
+
+    try {
+      await fetch(`http://${HOST}:5000/api/uploads/${filename}`, {
+        method: 'DELETE',
+      });
+
+      setEditedDescriptions((descs) => descs.filter((_, i) => i !== index));
+    } catch (err) {
+      console.error("Error deleting audio file:", err);
+      alert("Failed to delete the voice note.");
     }
   };
 
@@ -253,44 +309,77 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
                     </button>
                   </>
                 ) : (
-                  <>
-                    {isCodeBlock(desc.content) ? (
-                      <SyntaxHighlighter
-                        language="javascript"
-                        style={coy}
-                        className="rounded"
-                      >
-                        {desc.content}
-                      </SyntaxHighlighter>
-                    ) : desc.content.startsWith("![](") ? (
-                      <Tooltip title={filename}>
-                        <img
-                          src={desc.content.match(/\((.*?)\)/)?.[1]}
-                          alt="uploaded"
-                          className="rounded max-w-full"
-                        />
-                      </Tooltip>
-                    ) : (
-                      <p className="whitespace-pre-wrap">
-                        {desc.content || "No description."}
-                      </p>
-                    )}
-                  </>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={desc.checked || false}
+                      onChange={() => toggleChecked(i)}
+                      className="mt-1"
+                    />
+                    <div className="w-full">
+                      {desc.content.startsWith("@audio(") ? (
+                        <div className="flex items-center gap-2">
+                          <audio controls className="w-full">
+                            <source
+                              src={desc.content.match(/\((.*?)\)/)?.[1]}
+                              type="audio/webm"
+                            />
+                            Your browser does not support the audio tag.
+                          </audio>
+                          <button
+                            onClick={() => {
+                              console.log("🧨 Deleting voice:", desc.filename);
+                              deleteAudio(i, desc.filename);
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                            title="Delete voice note"
+                          >
+                            <FiTrash2 />
+                          </button>
+                        </div>
+                      ) : isCodeBlock(desc.content) ? (
+                        <SyntaxHighlighter
+                          language="javascript"
+                          style={coy}
+                          className={`rounded w-full ${desc.checked ? "opacity-60" : ""}`}
+                        >
+                          {desc.content}
+                        </SyntaxHighlighter>
+                      ) : desc.content.startsWith("![](") ? (
+                        <Tooltip title={desc.filename}>
+                          <img
+                            src={desc.content.match(/\((.*?)\)/)?.[1]}
+                            alt="uploaded"
+                            className={`rounded max-w-full ${desc.checked ? "opacity-50" : ""}`}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <span
+                          className={`whitespace-pre-wrap ${desc.checked ? "line-through text-gray-500" : ""
+                            }`}
+                        >
+                          {desc.content || "No description."}
+                        </span>
+                      )}
+                    </div>
+                  </label>
                 )}
               </div>
             ))}
           </div>
 
-          {isEditing && (
-            <button
-              onClick={addDescription}
-              className="flex items-center gap-1 mt-3 text-blue-600 hover:text-blue-800"
-            >
-              <FiPlus /> Add Description
-            </button>
-          )}
+          <div className="flex justify-center items-center w-full">
+            {isEditing && (
+              <button
+                onClick={addDescription}
+                className="flex items-center gap-1 mt-3 text-gray-800 border w-full justify-center p-1 rounded-2xl border-gray-500 hover:scale-105 transition-transform duration-300"
+              >
+                <MdDescription /> Add Description
+              </button>
+            )}
+          </div>
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex flex-wrap justify-between mt-5">
             {isEditing ? (
               <>
                 <input
@@ -318,45 +407,63 @@ const TaskDescriptionModal = ({ task, onClose, onTaskUpdate }) => {
                           content: `![](${data.url})`,
                           filename: data.filename,
                           createdAt: new Date(),
+                          checked: false,
                         },
                       ]);
                     }
                   }}
                   hidden
                 />
-                <Button
-                  variant="contained"
-                  onClick={() => fileRef.current.click()}
-                >
-                  Upload Image
-                </Button>
-                <button
-                  onClick={handleSave}
-                  className="bg-green-500 text-white px-3 py-1 rounded flex items-center gap-1"
-                >
-                  <FiCheck /> Save
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditedTitle(task.title);
-                    setEditedDescriptions(
-                      task.descriptions?.length
-                        ? task.descriptions
-                        : [{ content: "", createdAt: new Date() }]
-                    );
+
+                <RecordAudio
+                  onUploadSuccess={(url, filename) => {
+                    setEditedDescriptions((descs) => [
+                      ...descs,
+                      {
+                        content: `@audio(${url})`,
+                        filename,
+                        createdAt: new Date(),
+                      },
+                    ]);
                   }}
-                  className="bg-gray-300 px-3 py-1 rounded flex items-center gap-1"
+                />
+
+                <button
+                  onClick={() => fileRef.current.click()}
+                  className="border border-gray-800 px-3 py-1 rounded"
                 >
-                  <FiXCircle /> Cancel
+                  <FaImages size={23} />
                 </button>
+
+                <div className="flex gap-3 border border-gray-800 p-1">
+                  <button
+                    onClick={handleSave}
+                    className="border border-gray-400 px-3 py-1 rounded"
+                  >
+                    <FiCheck size={23} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditedTitle(task.title);
+                      setEditedDescriptions(
+                        task.descriptions?.length
+                          ? task.descriptions
+                          : [{ content: "", createdAt: new Date() }]
+                      );
+                    }}
+                    className="border border-gray-400 px-3 py-1 rounded"
+                  >
+                    <FiXCircle size={23} />
+                  </button>
+                </div>
               </>
             ) : (
               <button
                 onClick={() => setIsEditing(true)}
-                className="bg-blue-500 text-white px-3 py-1 rounded flex items-center gap-1"
+                className="border border-gray-400 rounded px-3 py-1 flex items-center gap-1"
               >
-                <FiEdit3 /> Edit
+                <FaEdit size={23} />
               </button>
             )}
           </div>
@@ -376,10 +483,9 @@ const Column = ({ column, children }) => {
     <div
       ref={setNodeRef}
       className={`bg-gray-100 shadow border rounded-lg p-4 min-h-[100px] transition-all
-        ${
-          isActiveDropTarget
-            ? "ring-2 ring-blue-500 bg-blue-50 animate-drop"
-            : ""
+        ${isActiveDropTarget
+          ? "ring-2 ring-blue-500 bg-blue-50 animate-drop"
+          : ""
         }
       `}
     >
@@ -395,11 +501,10 @@ const TrashBin = () => {
     <div
       ref={setNodeRef}
       className={`fixed bottom-9 right-4 z-50 p-4 rounded-full shadow-xl flex items-center justify-center transition-all duration-300
-                ${
-                  isOver
-                    ? "bg-red-600 text-white scale-110 animate-wiggle"
-                    : "bg-white text-red-600"
-                }
+                ${isOver
+          ? "bg-red-600 text-white scale-110 animate-wiggle"
+          : "bg-white text-red-600"
+        }
             `}
     >
       <FiTrash2 className="text-2xl" />
@@ -415,7 +520,7 @@ const useTrashSound = () => {
     audioRef.current = audio;
 
     const enableAudio = () => {
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
       audio.pause();
       audio.currentTime = 0;
       window.removeEventListener("click", enableAudio);
@@ -427,7 +532,7 @@ const useTrashSound = () => {
   const playSound = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch(() => { });
     }
   };
 
@@ -728,7 +833,7 @@ const KanbanBoardPage = () => {
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold">{board.title}</h1>
+              <h1 className="text-2xl font-bold pl-2">{board.title}</h1>
               <button
                 onClick={() => {
                   setRenamedBoardTitle(board.title);
@@ -741,12 +846,33 @@ const KanbanBoardPage = () => {
             </>
           )}
         </div>
-        <button
-          onClick={() => navigate("/")}
-          className="hover:scale-75 transition-transform duration-300"
-        >
-          <IoChevronBackCircle size={30} />
-        </button>
+        <div className="border mr-2 flex items-center gap-2 p-1 rounded border-gray-400">
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/board/${boardId}`;
+              navigator.clipboard.writeText(url);
+
+              toast.success("Board link copied to clipboard!");
+
+              toast.info(<QRCodeToast link={url} />, {
+                position: "top-center",
+                autoClose: 7000,
+                closeOnClick: true,
+                hideProgressBar: true,
+                icon: false
+              });
+            }}
+            className="hover:animate-wiggle"
+          >
+            <FaShareNodes size={25} />
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="hover:scale-75 transition-transform duration-300"
+          >
+            <IoChevronBackCircle size={30} />
+          </button>
+        </div>
       </div>
 
       {/* Add Task Section */}

@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const descriptionSchema = new mongoose.Schema({
     content: { type: String, default: "" },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    checked: { type: Boolean, default: false }
 });
 
 const taskSchema = new mongoose.Schema({
